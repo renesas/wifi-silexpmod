@@ -1,0 +1,166 @@
+sync_release:
+  stage: release
+
+  image:
+    name: alpine/git:latest
+    entrypoint: [""]
+
+  variables:
+    GIT_DEPTH: "0"
+    SOURCE_PACKAGE_NAME: "adc_gpt_periodic_sampling"
+
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+    - when: never
+
+  needs:
+    - job: generate_release_html
+      artifacts: true
+
+  before_script:
+    - apk add --no-cache zip
+
+  script:
+
+    # ------------------------------------------------------------
+    # Preserve generated artifact before switching branches.
+    # ------------------------------------------------------------
+    - cp index.html /tmp/index.html
+    - rm -f index.html
+
+    # ------------------------------------------------------------
+    # Use the author of the source commit for the release commit.
+    # ------------------------------------------------------------
+    - git config user.name "$(git show -s --format='%an' "${CI_COMMIT_SHA}")"
+    - git config user.email "$(git show -s --format='%ae' "${CI_COMMIT_SHA}")"
+
+    - echo "Release commit identity:"
+    - git config user.name
+    - git config user.email
+
+    # ------------------------------------------------------------
+    # Fetch and switch to the release branch.
+    # ------------------------------------------------------------
+    - git fetch origin release
+    - git switch -C release origin/release
+
+    # ------------------------------------------------------------
+    # Remove content that will be replaced.
+    #
+    # REVIEW THESE PATHS FOR YOUR REPOSITORY.
+    # ------------------------------------------------------------
+    - git rm -r --ignore-unmatch doc
+    - git rm -r --ignore-unmatch examples/vscode
+    - git rm -r --ignore-unmatch src
+    - git rm -f --ignore-unmatch index.html
+    - git rm -f --ignore-unmatch .gitattributes
+
+    # Optional:
+    # - git rm -f --ignore-unmatch README.md
+    # - git rm -f --ignore-unmatch .github/workflows/package-release.yml
+
+    # ------------------------------------------------------------
+    # Get release content from this pipeline's main commit.
+    #
+    # REVIEW THESE PATHS FOR YOUR REPOSITORY.
+    # ------------------------------------------------------------
+    - git restore --source="${CI_COMMIT_SHA}" --staged --worktree -- src
+    - git restore --source="${CI_COMMIT_SHA}" --staged --worktree -- doc
+    - git restore --source="${CI_COMMIT_SHA}" --staged --worktree -- examples/vscode
+    - git restore --source="${CI_COMMIT_SHA}" --staged --worktree -- .gitattributes
+
+    # Optional:
+    # - git restore --source="${CI_COMMIT_SHA}" --staged --worktree -- README.md
+    # - git restore --source="${CI_COMMIT_SHA}" --staged --worktree -- .github/workflows/package-release.yml
+
+    # ------------------------------------------------------------
+    # Add generated index.html.
+    # ------------------------------------------------------------
+    - cp /tmp/index.html index.html
+    - git add index.html
+
+    # ------------------------------------------------------------
+    # Generate diff artifacts.
+    # ------------------------------------------------------------
+    - git diff --cached --stat > release-diff-summary.txt
+    - git diff --cached > release-diff.patch
+
+    # ------------------------------------------------------------
+    # Package each VS Code project.
+    #
+    # The project directory itself is NOT included in the ZIP.
+    # ------------------------------------------------------------
+    - mkdir -p dist
+    - |
+      for project in examples/vscode/*; do
+        [ -d "$project" ] || continue
+
+        project_name="$(basename "$project")"
+
+        echo "Packaging ${project_name}..."
+
+        (
+          cd "$project"
+          zip -r "../../../dist/${project_name}.zip" .
+        )
+      done
+
+    # ------------------------------------------------------------
+    # Package source contents without including the src directory.
+    # ------------------------------------------------------------
+    - |
+      echo "Packaging ${SOURCE_PACKAGE_NAME}.zip..."
+
+      (
+        cd src
+        zip -r "../dist/${SOURCE_PACKAGE_NAME}.zip" .
+      )
+
+    # ------------------------------------------------------------
+    # Package documentation without including the doc directory.
+    # ------------------------------------------------------------
+    - |
+      echo "Packaging doc.zip..."
+
+      (
+        cd doc
+        zip -r "../dist/doc.zip" .
+      )
+
+    - echo "Generated packages:"
+    - ls -lh dist
+
+    # ------------------------------------------------------------
+    # Do not create an empty synchronization commit.
+    # ------------------------------------------------------------
+    - |
+      if git diff --cached --quiet; then
+        echo "Release is already synchronized."
+        exit 0
+      fi
+
+    # ------------------------------------------------------------
+    # Commit the release snapshot.
+    # ------------------------------------------------------------
+    - git commit -m "Sync release content from main"
+
+    # ------------------------------------------------------------
+    # Push the release branch back to GitLab.
+    #
+    # Requires:
+    #
+    # Settings > CI/CD > Job Token Permissions >
+    # Allow Git push requests to the repository > Enabled
+    # ------------------------------------------------------------
+    - git remote set-url origin "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+    - git push origin HEAD:release
+
+  artifacts:
+    name: "release-packages-$CI_COMMIT_SHA"
+    when: always
+    paths:
+      - dist/*.zip
+      - release-diff-summary.txt
+      - release-diff.patch
+    expire_in: 30 days
