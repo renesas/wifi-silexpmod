@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc 3.11" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>README</title>
+  <style>
+
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+
+ul.task-list[class]{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+font-size: inherit;
+width: 0.8em;
+margin: 0 0.8em 0.2em -1.6em;
+vertical-align: middle;
+}
+</style>
+  <style type="text/css">:root {
+--brand: #2b0a8c;
+--accent: #e6007e;
+--ink: #1f2430;
+--muted: #667085;
+--line: #e4e7ec;
+--surface: #f7f7fb;
+}
+* {
+box-sizing: border-box;
+}
+html {
+scroll-behavior: smooth;
+}
+body {
+margin: 0 auto;
+max-width: 1120px;
+padding: 50px;
+color: var(--ink);
+background: #ffffff;
+font-family: "Segoe UI", Arial, sans-serif;
+line-height: 1.65;
+}
+a {
+color: var(--brand);
+}
+a:hover {
+color: var(--accent);
+}
+h1 {
+margin-top: 2.7rem;
+padding-bottom: 0.35rem;
+border-bottom: 2px solid var(--line);
+}
+h2 {
+margin-top: 2.4rem;
+padding-bottom: 0.3rem;
+border-bottom: 1px solid var(--line);
+}
+h3,
+h4,
+h5,
+h6 {
+margin-top: 2rem;
+}
+img {
+display: block;
+max-width: 100%;
+height: auto;
+margin: 1rem auto 0.35rem;
+}
+table {
+width: 100%;
+border-collapse: collapse;
+margin: 1.25rem 0;
+}
+th,
+td {
+border: 1px solid var(--line);
+padding: 0.7rem;
+vertical-align: top;
+}
+th {
+background: var(--surface);
+text-align: left;
+}
+blockquote {
+margin: 1.2rem 0;
+padding: 0.7rem 1rem;
+border-left: 4px solid var(--brand);
+background: var(--surface);
+}
+code {
+font-family: Consolas, "Courier New", monospace;
+}
+pre {
+overflow-x: auto;
+padding: 1rem;
+border-radius: 8px;
+background: var(--surface);
+}
+
+body > h1:first-of-type {
+margin: -50px calc(50% - 50vw) 3rem;
+padding: 3.5rem max(50px, calc((100vw - 1120px) / 2));
+border: 0;
+background: linear-gradient(135deg, #250777, #3e16a3);
+color: #ffffff;
+font-size: clamp(2rem, 5vw, 3.5rem);
+line-height: 1.1;
+}
+@media (max-width: 640px) {
+body {
+padding: 20px;
+}
+body > h1:first-of-type {
+margin-top: -20px;
+padding: 2.5rem 20px;
+}
+}
+</style>
+</head>
+<body>
+<h1 id="wi-fi-onchip-silex-software-building-block">Wi-Fi OnChip Silex
+Software Building Block</h1>
+<h2 id="overview">Overview</h2>
+<p>This Software Building Block (SBB) demonstrates Wi-Fi OnChip Silex
+functionality on Renesas RA MCUs using the Renesas Silex UART Pmod. The
+reference application connects the MCU to a Wi-Fi access point, performs
+DNS lookup and ping operations, creates a TCP client socket, connects to
+a user-selected TCP server, and allows that server to control an
+on-board LED with <code>on</code> and <code>off</code> commands.</p>
+<p>This document covers only:</p>
+<ul>
+<li>FPB-RA4E2</li>
+<li>FPB-RA6E2</li>
+</ul>
+<h2 id="1-use-case-demonstrated">1. Use Case Demonstrated</h2>
+<p>The SBB demonstrates a network-connected RA application that uses the
+Renesas Silex UART Pmod for Wi-Fi connectivity. The user can scan for
+Wi-Fi access points or manually enter access-point credentials. After
+connection, the application obtains the MCU IP address, performs DNS
+lookup and ping operations against a user-entered URL or IP address,
+then operates as a TCP client connected to a TCP server on the
+network.</p>
+<p>After the TCP connection is established, the server can send:</p>
+<ul>
+<li><code>on</code> to turn the on-board LED on.</li>
+<li><code>off</code> to turn the on-board LED off.</li>
+<li>Any other text, which is treated as an invalid command and leaves
+the current LED state unaffected.</li>
+</ul>
+<p>The MCU reports the LED state on the terminal and sends
+<code>Success</code> or <code>Invalid</code> acknowledgments back to the
+TCP server.</p>
+<h2 id="2-sbb-core-code">2. SBB Core Code</h2>
+<p>The SBB functionality is divided between Wi-Fi management and
+TCP/network operations.</p>
+<h3 id="wi-fi-services-wifi_epc-and-wifi_eph">Wi-Fi services:
+<code>wifi_ep.c</code> and <code>wifi_ep.h</code></h3>
+<p>The Wi-Fi module provides:</p>
+<ul>
+<li><code>wifi_open()</code> to open and configure the Wi-Fi OnChip
+Silex module.</li>
+<li><code>wifi_config()</code> to connect to the selected access point,
+verify the connection, and obtain the assigned MCU IP address.</li>
+<li><code>wifi_scan()</code> to scan for available Wi-Fi access
+points.</li>
+<li><code>wifi_set_ap_ssid()</code> to select the SSID and security type
+from a scan result.</li>
+<li><code>socket_connected()</code> to check the Wi-Fi module connection
+status.</li>
+<li><code>wifi_deinit()</code> to close the Wi-Fi module when
+connected.</li>
+<li><code>str_to_lowercase()</code> to normalize received commands
+before command comparison.</li>
+<li><code>set_led()</code> to control the designated user LED through
+the FSP I/O port interface.</li>
+</ul>
+<p>The implementation maintains Wi-Fi state in <code>g_wifi</code> and
+stores up to <code>MAX_WIFI_SCAN_RESULTS</code> scan results in
+<code>g_scan_data</code>. The supplied configuration defines
+<code>MAX_WIFI_SCAN_RESULTS</code> as 10 and uses 32-byte Wi-Fi and
+socket buffers.</p>
+<h3 id="tcpnetwork-services-tcp_socketc-and-tcp_socketh">TCP/network
+services: <code>tcp_socket.c</code> and <code>tcp_socket.h</code></h3>
+<p>The TCP/network module provides:</p>
+<ul>
+<li><code>dns_query()</code> for DNS resolution or IP-address
+validation.</li>
+<li><code>ping()</code> for pinging a resolved address.</li>
+<li><code>socket_create()</code> for creating an IPv4 TCP client
+socket.</li>
+<li><code>tcp_connect()</code> for connecting the MCU TCP client to a
+server.</li>
+<li><code>network_connectivity_check()</code> for checking the socket
+state.</li>
+<li><code>tcp_send_data()</code> for sending data to the server.</li>
+<li><code>tcp_recv_data()</code> for receiving server data.</li>
+<li><code>socket_deinit()</code> for disconnecting when the socket is
+connected.</li>
+</ul>
+<p>Socket state, server address, port, send buffer, receive buffer, and
+status are stored in <code>g_socket</code>.</p>
+<h2 id="3-reusable-sbb-code-vs-demoreference-application-code">3.
+Reusable SBB Code vs. Demo/Reference Application Code</h2>
+<h3 id="reusable-sbb-oriented-code">Reusable SBB-oriented code</h3>
+<p>The networking functionality is implemented in:</p>
+<ul>
+<li><code>wifi_ep.c</code></li>
+<li><code>wifi_ep.h</code></li>
+<li><code>tcp_socket.c</code></li>
+<li><code>tcp_socket.h</code></li>
+</ul>
+<p>These modules provide the Wi-Fi, DNS, ping, TCP socket,
+data-transfer, connection-status, and LED-control operations used by the
+example.</p>
+<p>They are not independent of the Renesas software and hardware
+environment. The implementation directly uses the Wi-Fi OnChip Silex
+APIs, FSP types, generated configuration, and FSP I/O port services.</p>
+<h3 id="demoreference-application-code">Demo/reference application
+code</h3>
+<p>The demonstration workflow is implemented in:</p>
+<ul>
+<li><code>wifi_example_app.c</code></li>
+<li><code>wifi_example_app.h</code></li>
+</ul>
+<p><code>wifi_example_app_run()</code> is the reference application’s
+single entry point. It initializes the UART console, displays project
+information, collects access-point information, connects to Wi-Fi, runs
+the ping demonstration, creates and connects a TCP client socket, sends
+an initial <code>Hello</code>, and then waits for server commands.</p>
+<p>The following behavior belongs to the reference application rather
+than the lower-level SBB services:</p>
+<ul>
+<li>Terminal menus and prompts</li>
+<li>Selection between Wi-Fi scanning and manual credential entry</li>
+<li>Display and selection of scan results</li>
+<li>User entry of SSID, security type, and password</li>
+<li>User entry of a ping target</li>
+<li>User entry of TCP server address and port</li>
+<li>Interpretation of <code>on</code> and <code>off</code> TCP
+messages</li>
+<li>Terminal status/error messages</li>
+<li>Sending <code>Success</code> and <code>Invalid</code> demonstration
+acknowledgments</li>
+<li>Breakpoint-based terminal error handling</li>
+</ul>
+<h2 id="4-public-functions-to-review-first">4. Public Functions to
+Review First</h2>
+<p>For Wi-Fi integration, start with:</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Function</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>wifi_open()</code></td>
+<td>Opens the Wi-Fi OnChip Silex module.</td>
+</tr>
+<tr>
+<td><code>wifi_scan()</code></td>
+<td>Scans for available Wi-Fi access points.</td>
+</tr>
+<tr>
+<td><code>wifi_set_ap_ssid()</code></td>
+<td>Copies the selected scan result’s SSID and security setting into the
+active Wi-Fi parameters.</td>
+</tr>
+<tr>
+<td><code>wifi_config()</code></td>
+<td>Connects to the configured access point and obtains the MCU IP
+address.</td>
+</tr>
+<tr>
+<td><code>socket_connected()</code></td>
+<td>Checks the Wi-Fi connection status.</td>
+</tr>
+<tr>
+<td><code>wifi_deinit()</code></td>
+<td>Closes the connected Wi-Fi module.</td>
+</tr>
+</tbody>
+</table>
+<p>For TCP and network integration, review:</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Function</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>dns_query()</code></td>
+<td>Resolves a URL or validates an IP address.</td>
+</tr>
+<tr>
+<td><code>ping()</code></td>
+<td>Performs the demonstrated ping operation.</td>
+</tr>
+<tr>
+<td><code>socket_create()</code></td>
+<td>Creates the IPv4 TCP client socket.</td>
+</tr>
+<tr>
+<td><code>tcp_connect()</code></td>
+<td>Connects the TCP client to the specified server and port.</td>
+</tr>
+<tr>
+<td><code>network_connectivity_check()</code></td>
+<td>Checks whether the socket remains connected.</td>
+</tr>
+<tr>
+<td><code>tcp_send_data()</code></td>
+<td>Sends a message through the socket.</td>
+</tr>
+<tr>
+<td><code>tcp_recv_data()</code></td>
+<td>Receives data through the socket.</td>
+</tr>
+<tr>
+<td><code>socket_deinit()</code></td>
+<td>Disconnects when the socket is connected.</td>
+</tr>
+</tbody>
+</table>
+<p><code>wifi_example_app_run()</code> should be reviewed to understand
+how the reference application sequences these services.</p>
+<h2 id="5-reference-board-configuration-assumptions">5. Reference Board
+Configuration Assumptions</h2>
+<h3 id="supported-boards-covered-by-this-document">Supported boards
+covered by this document</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Board</th>
+<th>Silex UART Pmod connection</th>
+<th>Additional documented requirement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FPB-RA4E2</td>
+<td>Connect the Renesas Silex UART Pmod to <code>PMOD1</code>, aligning
+pin 1 of the Pmod with pin 1 of PMOD1.</td>
+<td>Close <code>E6</code> and open <code>E5</code> to use PMOD1 for
+UART.</td>
+</tr>
+<tr>
+<td>FPB-RA6E2</td>
+<td>Connect the Renesas Silex UART Pmod to <code>PMOD1</code>, aligning
+pin 1 of the Pmod with pin 1 of PMOD1.</td>
+<td>No additional board-specific requirement is stated in the supplied
+README.</td>
+</tr>
+</tbody>
+</table>
+<p>For both boards, the SBB source defines <code>USER_LED</code> as
+<code>BSP_IO_PORT_02_PIN_07</code>. <code>LED_ON</code> is
+<code>BSP_IO_LEVEL_HIGH</code> and <code>LED_OFF</code> is
+<code>BSP_IO_LEVEL_LOW</code> for these boards.</p>
+<h3 id="required-hardware-and-network-environment">Required hardware and
+network environment</h3>
+<p>The supplied README specifies:</p>
+<ul>
+<li>One supported Renesas RA board.</li>
+<li>One Renesas Silex UART Pmod.</li>
+<li>One Wi-Fi router/access point with internet access.</li>
+<li>Available Wi-Fi access-point credentials.</li>
+<li>One PC or laptop connected to the same Wi-Fi access point.</li>
+<li>A TCP server running on the PC and listening on a free port.</li>
+<li>A USB cable appropriate for the board for programming and
+debugging.</li>
+</ul>
+<p>The README recommends a TCP server port greater than
+<code>10,000</code>.</p>
+<h3 id="software-environment">Software environment</h3>
+<p>The supplied README identifies:</p>
+<ul>
+<li>Renesas Flexible Software Package (FSP) <code>6.5.0</code></li>
+<li>e2 studio <code>2026-04.2</code></li>
+<li>LLVM Embedded Toolchain for Arm <code>21.1.1</code></li>
+<li>Tera Term or a similar terminal console application</li>
+</ul>
+<h3 id="serial-terminal-configuration">Serial terminal
+configuration</h3>
+<p>The documented terminal settings are:</p>
+<ul>
+<li>Port: J-Link On-Board provided port</li>
+<li>Speed: <code>115200</code></li>
+<li>Data: <code>8 bit</code></li>
+<li>Parity: <code>none</code></li>
+<li>Stop bits: <code>1 bit</code></li>
+<li>Flow control: <code>none</code></li>
+<li>Receive new-line: <code>CR</code></li>
+<li>Transmit new-line: <code>CR</code></li>
+<li>Local echo: enabled</li>
+</ul>
+<h2 id="6-what-must-be-changed-when-porting">6. What Must Be Changed
+When Porting</h2>
+<p>When integrating the SBB into another project or board, review these
+points.</p>
+<h3 id="silex-uart-pmod-connection">Silex UART Pmod connection</h3>
+<p>The reference hardware uses the Renesas Silex UART Pmod. For
+FPB-RA4E2 and FPB-RA6E2 it connects through PMOD1. FPB-RA4E2
+additionally requires <code>E6</code> closed and <code>E5</code> open
+for PMOD1 UART operation.</p>
+<p>If the hardware connection changes, the corresponding project
+peripheral and pin configuration must match the connection used by the
+Wi-Fi module.</p>
+<h3 id="user-led">User LED</h3>
+<p>The supplied SBB selects <code>BSP_IO_PORT_02_PIN_07</code> as
+<code>USER_LED</code> for both FPB-RA4E2 and FPB-RA6E2. If another board
+or product uses a different LED or output, update the applicable board
+configuration or LED-control integration.</p>
+<h3 id="wi-fi-configuration">Wi-Fi configuration</h3>
+<p>The SBB uses <code>g_wifi_onchip_silex_cfg</code> when opening the
+Wi-Fi module. The target project must provide the Wi-Fi OnChip Silex
+configuration required by the supplied code.</p>
+<p>Wi-Fi credentials are provided interactively by the reference
+application. A product that obtains credentials by another mechanism
+should replace that demo-level input workflow while providing the
+required SSID, security type, and password to the SBB.</p>
+<h3 id="network-behavior-and-timing">Network behavior and timing</h3>
+<p>The supplied network constants include:</p>
+<ul>
+<li><code>PING_COUNT</code>: 4</li>
+<li><code>PING_INTERVAL_MS</code>: 100 ms</li>
+<li><code>WIFI_MAX_TRY</code>: 5</li>
+<li>TCP send timeout: 400 ms</li>
+<li>TCP receive timeout: 15,000 ms</li>
+<li><code>BUFF_LEN</code>: 32 bytes</li>
+<li>Maximum Wi-Fi scan results: 10</li>
+</ul>
+<p>Review these values if the target system requires different retry,
+timeout, buffer, or scanning behavior.</p>
+<h3 id="tcp-server">TCP server</h3>
+<p>The reference application obtains the server IP address and port from
+the terminal. Replace this UI behavior if the product stores or
+discovers the endpoint differently.</p>
+<h3 id="tasking">Tasking</h3>
+<p>The reference source states that <code>wifi_thread_entry.c</code>
+calls <code>wifi_example_app_run()</code>. When the example exits after
+losing network connectivity, it calls <code>vTaskDelay(1)</code>
+continuously. The supplied files do not specify a task priority
+value.</p>
+<h3 id="console">Console</h3>
+<p>The reference application depends on
+<code>console/uart_console.h</code> and standard input/output functions
+for its interactive workflow. This layer can be replaced if the product
+does not require a terminal-driven user interface.</p>
+<h2 id="7-dependencies">7. Dependencies</h2>
+<h3 id="renesas-fsp-and-wi-fi-middleware">Renesas FSP and Wi-Fi
+middleware</h3>
+<p>The implementation depends on the Wi-Fi OnChip Silex middleware APIs,
+including:</p>
+<ul>
+<li><code>rm_wifi_onchip_silex_open()</code></li>
+<li><code>rm_wifi_onchip_silex_close()</code></li>
+<li><code>rm_wifi_onchip_silex_scan()</code></li>
+<li><code>rm_wifi_onchip_silex_connect()</code></li>
+<li><code>rm_wifi_onchip_silex_socket_connected()</code></li>
+<li><code>rm_wifi_onchip_silex_ip_addr_get()</code></li>
+<li><code>rm_wifi_onchip_silex_dns_query()</code></li>
+<li><code>rm_wifi_onchip_silex_ping()</code></li>
+<li><code>rm_wifi_onchip_silex_socket_create()</code></li>
+<li><code>rm_wifi_onchip_silex_tcp_connect()</code></li>
+<li><code>rm_wifi_onchip_silex_socket_status_get()</code></li>
+<li><code>rm_wifi_onchip_silex_send()</code></li>
+<li><code>rm_wifi_onchip_silex_recv()</code></li>
+<li><code>rm_wifi_onchip_silex_disconnect()</code></li>
+</ul>
+<p>The code also uses the generated <code>g_wifi_onchip_silex_cfg</code>
+configuration.</p>
+<h3 id="fspbsp-resources">FSP/BSP resources</h3>
+<p>The LED implementation uses:</p>
+<ul>
+<li><code>R_IOPORT_PinWrite()</code></li>
+<li><code>g_ioport.p_ctrl</code></li>
+<li><code>BSP_IO_PORT_02_PIN_07</code> for FPB-RA4E2 and FPB-RA6E2</li>
+</ul>
+<p>The reference application also uses
+<code>R_FSP_VersionGet()</code>.</p>
+<h3 id="console-and-runtime-dependencies">Console and runtime
+dependencies</h3>
+<p>The reference application uses:</p>
+<ul>
+<li><code>console/uart_console.h</code></li>
+<li><code>uart_console_init()</code></li>
+<li><code>uart_console_flush()</code></li>
+<li>Standard input/output functions including <code>printf()</code> and
+<code>fgets()</code></li>
+<li><code>vTaskDelay()</code> after the demonstration exits</li>
+</ul>
+<h3 id="hardware-and-network-resources">Hardware and network
+resources</h3>
+<p>The demonstrated setup requires:</p>
+<ul>
+<li>FPB-RA4E2 or FPB-RA6E2</li>
+<li>Renesas Silex UART Pmod connected to PMOD1</li>
+<li>Wi-Fi access point</li>
+<li>Network connectivity used for the demonstrated DNS and ping
+operations</li>
+<li>PC/laptop on the same Wi-Fi access point for the TCP-server
+demonstration</li>
+<li>On-board user LED</li>
+<li>UART terminal connection</li>
+</ul>
+<h2 id="8-demonstrated-behavior-and-performance">8. Demonstrated
+Behavior and Performance</h2>
+<p>The supplied project demonstrates:</p>
+<ul>
+<li>Scanning for Wi-Fi access points.</li>
+<li>Manual entry of SSID and security configuration.</li>
+<li>Support in the reference UI for Open, WPA, and WPA2 selections.</li>
+<li>Connection to a Wi-Fi access point and retrieval/display of the MCU
+IP address.</li>
+<li>DNS query or IP-address validation.</li>
+<li>Ping operation using 4 pings with a configured 100 ms interval.</li>
+<li>IPv4 TCP client socket creation.</li>
+<li>Connection to a user-entered TCP server IP address and port.</li>
+<li>Transmission of an initial <code>Hello</code> message after TCP
+connection.</li>
+<li>Receipt of <code>on</code> and <code>off</code> commands from the
+TCP server.</li>
+<li>On-board LED control in response to those commands.</li>
+<li><code>Success</code> acknowledgment for valid commands and
+<code>Invalid</code> for other commands.</li>
+<li>Preservation of the current LED state for invalid commands.</li>
+</ul>
+<p>The TCP send operation uses a 400 ms timeout and the receive
+operation uses a 15-second timeout. TCP connection attempts use
+<code>WIFI_MAX_TRY</code>, which is defined as 5.</p>
+<p>The supplied files do not provide throughput, latency,
+memory-footprint, CPU-load, or RF-performance measurements.</p>
+<h2 id="9-file-modification-guidance">9. File Modification Guidance</h2>
+<h3 id="sbb-implementation-files">SBB implementation files</h3>
+<ul>
+<li><code>wifi_ep.c</code></li>
+<li><code>wifi_ep.h</code></li>
+<li><code>tcp_socket.c</code></li>
+<li><code>tcp_socket.h</code></li>
+</ul>
+<p>These contain the Wi-Fi and network functionality used by the
+reference application. Product-specific changes to these files create a
+local SBB variant that must be reconciled when a newer SBB version is
+adopted.</p>
+<h3 id="demoreference-application-files">Demo/reference application
+files</h3>
+<ul>
+<li><code>wifi_example_app.c</code></li>
+<li><code>wifi_example_app.h</code></li>
+</ul>
+<p>These implement the terminal-oriented demonstration, including
+credential collection, access-point selection, ping-target input,
+TCP-server input, LED command interpretation, terminal output, and
+demonstration error handling. A product can replace this application
+layer while retaining the applicable SBB services.</p>
+<h3 id="fsp-generated-and-configuration-dependencies">FSP-generated and
+configuration dependencies</h3>
+<p>The supplied source includes <code>hal_data.h</code> and uses
+<code>g_wifi_onchip_silex_cfg</code> and <code>g_ioport</code>. These
+are project/FSP configuration dependencies rather than functionality
+implemented by the SBB source files listed above.</p>
+<h2 id="10-adopting-a-newer-sbb-release-after-local-modifications">10.
+Adopting a Newer SBB Release After Local Modifications</h2>
+<p>The supplied files do not define an automatic upgrade or source-merge
+mechanism for locally modified SBB code.</p>
+<p>To reduce future integration work, keep product-specific workflows,
+credential sources, endpoint selection, command processing, and
+user-interface behavior outside the SBB implementation modules where
+practical. The existing separation between <code>wifi_ep.*</code>,
+<code>tcp_socket.*</code>, and <code>wifi_example_app.*</code> provides
+a natural boundary for doing this.</p>
+<p>If the SBB implementation itself is modified, record those changes.
+When moving to a newer SBB release, compare the updated Wi-Fi/TCP
+modules and FSP configuration assumptions against the locally modified
+version, reapply only the product-specific changes still required, and
+revalidate Wi-Fi connection, DNS/ping, TCP connectivity, data transfer,
+and any product-specific hardware behavior.</p>
+<h2 id="reference-application-operation">Reference Application
+Operation</h2>
+<ol type="1">
+<li>Connect the Renesas Silex UART Pmod to PMOD1, aligning pin 1
+correctly.</li>
+<li>On FPB-RA4E2, close <code>E6</code> and open <code>E5</code> for
+PMOD1 UART operation.</li>
+<li>Connect the board USB debug port to the host PC.</li>
+<li>Ensure the PC/laptop is connected to the same Wi-Fi access point and
+that the access-point credentials are available.</li>
+<li>Configure the serial terminal for <code>115200</code>, 8 data bits,
+no parity, 1 stop bit, no flow control, CR receive/transmit newline, and
+local echo.</li>
+<li>Run the application and either scan for an access point or manually
+enter its credentials.</li>
+<li>Enter a URL or IP address for the DNS/ping demonstration.</li>
+<li>Start a TCP server on the PC. The supplied README recommends a free
+port greater than <code>10,000</code>.</li>
+<li>Enter the TCP server IP address and port in the MCU terminal.</li>
+<li>After the connection is established, send <code>on</code> or
+<code>off</code> from the server to control the board LED.</li>
+<li>Observe the LED status and acknowledgment messages on the
+terminal/server.</li>
+</ol>
+<p>For the ping demonstration, the supplied README instructs the user to
+enable the Windows Defender Firewall inbound rule
+<code>File and Printer Sharing (Echo Request - ICMPv4-In)</code> on the
+host PC when accepting ping requests from the RA MCU to the TCP
+server.</p>
+<h2 id="source-file-map">Source File Map</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>File</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>wifi_ep.c</code></td>
+<td>Wi-Fi module initialization, configuration, scanning, connection
+status, IP-address retrieval, string normalization, LED control, and
+deinitialization.</td>
+</tr>
+<tr>
+<td><code>wifi_ep.h</code></td>
+<td>Wi-Fi constants, board LED selection, Wi-Fi data structure, shared
+state, and public Wi-Fi function declarations.</td>
+</tr>
+<tr>
+<td><code>tcp_socket.c</code></td>
+<td>DNS, ping, TCP socket creation/connection, connection checking,
+send/receive operations, and socket deinitialization.</td>
+</tr>
+<tr>
+<td><code>tcp_socket.h</code></td>
+<td>Network constants, timeouts, socket data structure, byte-order
+conversion, and public network function declarations.</td>
+</tr>
+<tr>
+<td><code>wifi_example_app.c</code></td>
+<td>Demo/reference workflow for Wi-Fi setup, ping, TCP client
+connection, terminal interaction, and LED command processing.</td>
+</tr>
+<tr>
+<td><code>wifi_example_app.h</code></td>
+<td>Reference-application interface plus terminal banner, menu, guide,
+and error strings.</td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>
